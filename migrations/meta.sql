@@ -1,0 +1,6 @@
+--! {"depends_on": []}
+CREATE TABLE IF NOT EXISTS migration (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
