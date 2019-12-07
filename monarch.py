@@ -26,10 +26,14 @@ def main():
                         help='Migration file to run')
     parser.add_argument('-n', '--dry', action='store_true',
                         help="Dry-run")
-    parser.add_argument('--show', action='store_true',
-                        help='Show all migrations applied')
     parser.add_argument('-y', '--accept-all', action='store_true',
                         help='Do not prompt before applying migrations')
+    parser.add_argument('-f', '--fake', action='store_true',
+                        help='Skip migrations and register them as applied')
+    parser.add_argument('-r', '--skip-register', action='store_true',
+                        help='Skip registering applied migrations')
+    parser.add_argument('--show', action='store_true',
+                        help='Show all migrations applied')
     args = parser.parse_args()
     init_meta()
 
@@ -37,7 +41,9 @@ def main():
         show_migrations()
     arg_dict = {
         'migration': args.migrate,
-        'apply_migrations': not args.dry,
+        'apply_migrations': not args.fake,
+        'register': not args.skip_register,
+        'dry_run': args.dry,
         'accept_all': args.accept_all
     }
     process_migration(**arg_dict)
@@ -56,11 +62,13 @@ def init_meta():
 def process_migration(migration,
                     apply_migrations=True,
                     register=True,
+                    dry_run=False,
                     accept_all=False):
     migrations_to_run = get_migrations_to_run(migration)
     run_migrations(migrations_to_run,
                    apply_migrations=apply_migrations,
                    register=register,
+                   dry_run=dry_run,
                    accept_all=accept_all)
 
 
@@ -87,6 +95,7 @@ def get_applied_migrations():
 def run_migrations(migrations,
                    apply_migrations=True,
                    register=True,
+                   dry_run=False,
                    accept_all=False):
     """Apply a list of migrations to db
 
@@ -101,7 +110,7 @@ def run_migrations(migrations,
         name = migration['name']
         migration['script'] = get_sql_script(name)
 
-    if not apply_migrations:
+    if dry_run:
         for migration in migrations:
             print(f'------------------ {migration["name"]} ------------------')
             print(migration['script'])
@@ -111,9 +120,6 @@ def run_migrations(migrations,
         return
 
     connection = get_db_connection()
-    # When exiting context manager, everything executed through the
-    # connection is commited in a single transaction, unless we force
-    # it through commit()
     applied_migrations = []
     with connection:
         curs = connection.cursor()
@@ -121,7 +127,8 @@ def run_migrations(migrations,
             name = migration['name']
             script = migration['script']
             print('Applying {}'.format(name))
-            curs.execute(script)
+            if apply_migrations:
+                curs.execute(script)
             applied_migrations.append(name)
         connection.commit()
     if register:
