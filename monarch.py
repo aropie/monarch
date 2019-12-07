@@ -22,14 +22,25 @@ _TARGET_DB_ENGINE = DBEngine.POSTGRES
 def main():
     # TODO: add argparse
     parser = ArgumentParser(description='Simple db migrations manager')
+    parser.add_argument('-m', '--migrate', required=True,
+                        help='Migration file to run')
+    parser.add_argument('-n', '--dry', action='store_true',
+                        help="Dry-run")
     parser.add_argument('--show', action='store_true',
                         help='Show all migrations applied')
+    parser.add_argument('-y', '--accept-all', action='store_true',
+                        help='Do not prompt before applying migrations')
     args = parser.parse_args()
     init_meta()
 
     if args.show:
         show_migrations()
-    process_migration('migrations/some_test_3.sql')
+    arg_dict = {
+        'migration': args.migrate,
+        'apply_migrations': not args.dry,
+        'accept_all': args.accept_all
+    }
+    process_migration(**arg_dict)
 
 
 def init_meta():
@@ -42,9 +53,15 @@ def init_meta():
         connection.commit()
 
 
-def process_migration(migration):
+def process_migration(migration,
+                    apply_migrations=True,
+                    register=True,
+                    accept_all=False):
     migrations_to_run = get_migrations_to_run(migration)
-    run_migrations(migrations_to_run)
+    run_migrations(migrations_to_run,
+                   apply_migrations=apply_migrations,
+                   register=register,
+                   accept_all=accept_all)
 
 
 def get_migrations_to_run(migration):
@@ -68,12 +85,13 @@ def get_applied_migrations():
 
 
 def run_migrations(migrations,
-                   apply_migration=True,
-                   register=True):
+                   apply_migrations=True,
+                   register=True,
+                   accept_all=False):
     """Apply a list of migrations to db
 
     :param migrations: list of migrations to apply
-    :param apply_migration: if true, apply migrations to db
+    :param apply_migration: if true, apply migrations to db, else do a dry-run
     :param register_migration: if true, register applied migrations to db
     :returns: None
     :rtype: None
@@ -82,6 +100,15 @@ def run_migrations(migrations,
     for migration in migrations:
         name = migration['name']
         migration['script'] = get_sql_script(name)
+
+    if not apply_migrations:
+        for migration in migrations:
+            print(f'------------------ {migration["name"]} ------------------')
+            print(migration['script'])
+        return
+
+    if not accept_all and not prompt_for_migrations(migrations):
+        return
 
     connection = get_db_connection()
     # When exiting context manager, everything executed through the
@@ -209,6 +236,14 @@ def is_valid_command(string):
 
     """
     return string[:3] == '--!'
+
+def prompt_for_migrations(migrations):
+    print(f'About to run {len(migrations)} on blah')
+    for m in migrations:
+        print(m['name'])
+    response = input('Proceed? (Y/n) ').strip().lower()
+    print()
+    return (not response) or (response[0] == 'y')
 
 
 def show_migrations():
