@@ -9,6 +9,7 @@ class DBEngine(Enum):
     POSTGRES = 2
 
 
+# TODO: add config file
 _INIT_MIGRATION = 'migrations/meta.sql'
 _INTERNAL_DB_FILE = 'monarch.sql'
 _INTERNAL_DB_ENGINE = DBEngine.SQLITE
@@ -16,11 +17,13 @@ _TARGET_DB_ENGINE = DBEngine.POSTGRES
 
 
 def main():
+    # TODO: add argparse
     init_meta()
     process_migration('migrations/some_test_1.sql')
 
 
 def init_meta():
+    # TODO: add try-except
     connection = get_db_connection(internal=True)
     with connection:
         curs = connection.cursor()
@@ -44,6 +47,7 @@ def get_migrations_to_run(migration):
 
 
 def get_applied_migrations():
+    # TODO: add try-except
     connection = get_db_connection(internal=True)
     with connection:
         cursor = connection.cursor()
@@ -91,6 +95,7 @@ def run_migrations(migrations,
 
 
 def register_migrations(migrations):
+    # TODO: add try-except
     connection = get_db_connection(internal=True)
     with connection:
         cursor = connection.cursor()
@@ -101,6 +106,7 @@ def register_migrations(migrations):
 
 
 def get_db_connection(internal=False):
+    # TODO: Improve this to be more flexible
     if internal:
         import sqlite3
         engine_module = sqlite3
@@ -131,7 +137,6 @@ def get_sql_script(migration):
     with open(migration, 'r') as f:
         sql = " ".join(f.readlines())
     return sql
-
 
 
 if __name__ == '__main__':
