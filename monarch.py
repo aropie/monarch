@@ -3,21 +3,31 @@
 from os.path import join, relpath, splitext, isdir, dirname
 from enum import Enum
 
+
 class DBEngine(Enum):
     SQLITE = 1
     POSTGRES = 2
 
-_INIT_MIGRATION = 'meta.sql'
+
+_INIT_MIGRATION = 'migrations/meta.sql'
 _INTERNAL_DB_FILE = 'monarch.sql'
 _INTERNAL_DB_ENGINE = DBEngine.SQLITE
 _TARGET_DB_ENGINE = DBEngine.POSTGRES
 
+
 def main():
-    # init_meta()
+    init_meta()
     process_migration('migrations/some_test_1.sql')
 
+
 def init_meta():
-    process_migration(_INIT_MIGRATION)
+    connection = get_db_connection(internal=True)
+    with connection:
+        curs = connection.cursor()
+        script = get_sql_script(_INIT_MIGRATION)
+        curs.execute(script)
+        connection.commit()
+
 
 def process_migration(migration):
     migrations_to_run = [{'name': migration}]
@@ -25,8 +35,8 @@ def process_migration(migration):
 
 
 def run_migrations(migrations,
-                 apply_migration=True,
-                 register_migration=True):
+                   apply_migration=True,
+                   register=True):
     """Apply a list of migrations to db
 
     :param migrations: list of migrations to apply
@@ -44,6 +54,7 @@ def run_migrations(migrations,
     # When exiting context manager, everything executed through the
     # connection is commited in a single transaction, unless we force
     # it through commit()
+    applied_migrations = []
     with connection:
         curs = connection.cursor()
         for migration in migrations:
@@ -52,9 +63,23 @@ def run_migrations(migrations,
             try:
                 print('Applying {}'.format(name))
                 curs.execute(script)
+                applied_migrations.append(name)
             except Error as error:
                 raise RuntimeError('failed processing {}'.format(name))
         connection.commit()
+    if register:
+        register_migrations(applied_migrations)
+
+
+def register_migrations(migrations):
+    connection = get_db_connection(internal=True)
+    with connection:
+        cursor = connection.cursor()
+        for migration in migrations:
+            cursor.execute("INSERT INTO migration (name) "
+                           "VALUES ('%s');" % migration)
+        connection.commit()
+
 
 def get_db_connection(internal=False):
     if internal:
