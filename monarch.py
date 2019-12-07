@@ -1,6 +1,4 @@
-# python3
-
-from os.path import join, relpath, splitext, isdir, dirname
+#!/usr/bin/env python3
 from enum import Enum
 from json.decoder import JSONDecodeError
 from argparse import ArgumentParser
