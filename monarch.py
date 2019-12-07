@@ -3,6 +3,7 @@
 from os.path import join, relpath, splitext, isdir, dirname
 from enum import Enum
 from json.decoder import JSONDecodeError
+from argparse import ArgumentParser
 import json
 
 
@@ -20,7 +21,14 @@ _TARGET_DB_ENGINE = DBEngine.POSTGRES
 
 def main():
     # TODO: add argparse
+    parser = ArgumentParser(description='Simple db migrations manager')
+    parser.add_argument('--show', action='store_true',
+                        help='Show all migrations applied')
+    args = parser.parse_args()
     init_meta()
+
+    if args.show:
+        show_migrations()
     process_migration('migrations/some_test_3.sql')
 
 
@@ -85,12 +93,9 @@ def run_migrations(migrations,
         for migration in migrations:
             name = migration['name']
             script = migration['script']
-            try:
-                print('Applying {}'.format(name))
-                curs.execute(script)
-                applied_migrations.append(name)
-            except Error as error:
-                raise RuntimeError('failed processing {}'.format(name))
+            print('Applying {}'.format(name))
+            curs.execute(script)
+            applied_migrations.append(name)
         connection.commit()
     if register:
         register_migrations(applied_migrations)
@@ -204,6 +209,17 @@ def is_valid_command(string):
 
     """
     return string[:3] == '--!'
+
+
+def show_migrations():
+    migrations = get_applied_migrations()
+    print('        MIGRATIONS        ')
+    print('--------------------------')
+    for migration in migrations:
+        status = '✓'
+        print(f'{status} {migration}')
+    print(f'\n{len(migrations)} migrations applied')
+
 
 
 if __name__ == '__main__':
