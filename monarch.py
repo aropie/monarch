@@ -30,8 +30,27 @@ def init_meta():
 
 
 def process_migration(migration):
-    migrations_to_run = [{'name': migration}]
+    migrations_to_run = get_migrations_to_run(migration)
     run_migrations(migrations_to_run)
+
+
+def get_migrations_to_run(migration):
+    migration_candidates = [{'name': migration}]
+    # _solve_dependencies(migration, migrations_to_run, seen=[])
+    applied_migrations = get_applied_migrations()
+    migrations_to_run = [m for m in migration_candidates
+                         if m['name'] not in applied_migrations]
+    return migrations_to_run
+
+
+def get_applied_migrations():
+    connection = get_db_connection(internal=True)
+    with connection:
+        cursor = connection.cursor()
+        sql = 'SELECT name from migration;'
+        cursor.execute(sql)
+        migrations = cursor.fetchall()
+    return [m[0] for m in migrations]
 
 
 def run_migrations(migrations,
