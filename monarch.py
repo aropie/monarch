@@ -2,6 +2,8 @@
 
 from os.path import join, relpath, splitext, isdir, dirname
 from enum import Enum
+from json.decoder import JSONDecodeError
+import json
 
 
 class DBEngine(Enum):
@@ -19,7 +21,7 @@ _TARGET_DB_ENGINE = DBEngine.POSTGRES
 def main():
     # TODO: add argparse
     init_meta()
-    process_migration('migrations/some_test_1.sql')
+    process_migration('migrations/some_test_3.sql')
 
 
 def init_meta():
@@ -38,8 +40,8 @@ def process_migration(migration):
 
 
 def get_migrations_to_run(migration):
-    migration_candidates = [{'name': migration}]
-    # _solve_dependencies(migration, migrations_to_run, seen=[])
+    migration_candidates = []
+    _solve_dependencies(migration, migration_candidates, seen=[])
     applied_migrations = get_applied_migrations()
     migrations_to_run = [m for m in migration_candidates
                          if m['name'] not in applied_migrations]
@@ -137,6 +139,71 @@ def get_sql_script(migration):
     with open(migration, 'r') as f:
         sql = " ".join(f.readlines())
     return sql
+
+
+def _solve_dependencies(migration, resolved, seen=None):
+    """Recursively solves dependency tree. We use two auxiliary
+    accumulators: resolved and seen. A migration is considered
+    resolved when all its dependencies have been solved. A
+    circular dependency is discovered when a a migration has
+    already been walked through but its still not resolved
+
+    :param migration: migration to solve dependencies for
+    :param resolved: aux accumulator. Traces solved dependencies
+    :param seen: aux accumulator. Traces traversed depenencies
+    :returns: None
+    :rtype: None
+    """
+    if seen is None:
+        seen = []
+    seen.append({'name': migration})
+    commands = parse_header(migration)
+    for dependency in commands.get('depends_on', []):
+        if dependency not in {m['name'] for m in resolved}:
+            if dependency in {m['name'] for m in seen}:
+                raise ValueError(f'Circular dependency detected '
+                                 '{migration, dependency}')
+            _solve_dependencies(dependency, resolved, seen)
+    resolved.append({'name': migration, **commands})
+
+
+def parse_header(migration):
+    """Parse a migration header to be able to apply monarch's commands
+
+    :param migration: migration to parse header from
+    :returns: dictionary with commands
+    :rtype: dict
+
+    """
+    try:
+        with open(migration, 'r') as f:
+            line = f.readline()
+            if is_valid_command(line):
+                line = line[3:].strip()
+                try:
+                    commands = json.loads(line)
+                except JSONDecodeError as error:
+                    raise ValueError(
+                        f'"{line}" in {migration} '
+                        'is not a valid Monarch command'
+                    ) from error
+                return commands
+            return {}
+    except Exception as error:
+        raise RuntimeError(
+            f'parsing headers for {migration} failed'
+        ) from error
+
+
+def is_valid_command(string):
+    """Checks if a string is a valid Monarch command
+
+    :param string: string to verify
+    :returns: true or false
+    :rtype: bool
+
+    """
+    return string[:3] == '--!'
 
 
 if __name__ == '__main__':
