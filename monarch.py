@@ -18,7 +18,6 @@ _TARGET_DB_ENGINE = DBEngine.POSTGRES
 
 
 def main():
-    # TODO: add argparse
     parser = ArgumentParser(description='Simple db migrations manager')
     parser.add_argument('-m', '--migrate', required=True,
                         help='Migration file to run')
@@ -62,6 +61,17 @@ def process_migration(migration,
                     register=True,
                     dry_run=False,
                     accept_all=False):
+    """Processes. a single migration.
+
+    :param migration: migration to process.
+    :param apply_migrations: if True, apply migrations to db.
+    :param register: If True, register migration to db.
+    :param dry_run: If True, just show what would be run on the db.
+    :param accept_all: If True, don't prompt for confirmation to migrate.
+    :returns: None
+    :rtype: None
+
+    """
     migrations_to_run = get_migrations_to_run(migration)
     run_migrations(migrations_to_run,
                    apply_migrations=apply_migrations,
@@ -71,6 +81,13 @@ def process_migration(migration,
 
 
 def get_migrations_to_run(migration):
+    """Returns a list of migrations to apply, solving dependencies.
+
+    :param migration: migration to get dependencies from.
+    :returns: list of migrations to run.
+    :rtype: dict[]
+
+    """
     migration_candidates = []
     _solve_dependencies(migration, migration_candidates, seen=[])
     applied_migrations = get_applied_migrations()
@@ -80,6 +97,12 @@ def get_migrations_to_run(migration):
 
 
 def get_applied_migrations():
+    """Fetches a list of applied migrations from db.
+
+    :returns: list of applied migrations.
+    :rtype: string[]
+
+    """
     # TODO: add try-except
     connection = get_db_connection(internal=True)
     with connection:
@@ -95,11 +118,13 @@ def run_migrations(migrations,
                    register=True,
                    dry_run=False,
                    accept_all=False):
-    """Apply a list of migrations to db
+    """Applies a list of migrations to db.
 
-    :param migrations: list of migrations to apply
-    :param apply_migration: if true, apply migrations to db, else do a dry-run
-    :param register_migration: if true, register applied migrations to db
+    :param migration: migration to process.
+    :param apply_migrations: if True, apply migrations to db.
+    :param register: If True, register migration to db.
+    :param dry_run: If True, just show what would be run on the db.
+    :param accept_all: If True, don't prompt for confirmation to migrate.
     :returns: None
     :rtype: None
 
@@ -134,6 +159,13 @@ def run_migrations(migrations,
 
 
 def register_migrations(migrations):
+    """Registers a list of migrations on the db.
+
+    :param migrations: List of migrations to register.
+    :returns: None
+    :rtype: None
+
+    """
     # TODO: add try-except
     connection = get_db_connection(internal=True)
     with connection:
@@ -145,11 +177,22 @@ def register_migrations(migrations):
 
 
 def get_db_connection(internal=False):
+    """
+    Returns a connection to the required db.
+
+    :param internal: Whether the connection is for the internal db.
+    :returns: A connection object.
+    :rtype: Connection
+
+    """
     # TODO: Improve this to be more flexible
     if internal:
         import sqlite3
         engine_module = sqlite3
-        connection_params = {'database': _INTERNAL_DB_FILE}
+        connection_params = {
+            'database': _INTERNAL_DB_FILE,
+            'isolation_level': 'DEFERRED',
+        }
     else:
         import psycopg2
         engine_module = psycopg2
@@ -166,10 +209,10 @@ def get_db_connection(internal=False):
 
 
 def get_sql_script(migration):
-    """Get sql script from a migration
+    """Gets sql script from a migration.
 
-    :param migration: migration to extract content from
-    :returns: a sql script
+    :param migration: migration to extract content from.
+    :returns: a sql script.
     :rtype: string
 
     """
@@ -179,15 +222,17 @@ def get_sql_script(migration):
 
 
 def _solve_dependencies(migration, resolved, seen=None):
-    """Recursively solves dependency tree. We use two auxiliary
+    """Recursively solves dependency tree.
+
+    We use two auxiliary
     accumulators: resolved and seen. A migration is considered
     resolved when all its dependencies have been solved. A
     circular dependency is discovered when a a migration has
     already been walked through but its still not resolved
 
-    :param migration: migration to solve dependencies for
-    :param resolved: aux accumulator. Traces solved dependencies
-    :param seen: aux accumulator. Traces traversed depenencies
+    :param migration: migration to solve dependencies for.
+    :param resolved: aux accumulator. Traces solved dependencies.
+    :param seen: aux accumulator. Traces traversed depenencies.
     :returns: None
     :rtype: None
     """
@@ -205,9 +250,9 @@ def _solve_dependencies(migration, resolved, seen=None):
 
 
 def parse_header(migration):
-    """Parse a migration header to be able to apply monarch's commands
+    """Parses a migration header to be able to apply monarch's commands.
 
-    :param migration: migration to parse header from
+    :param migration: migration to parse header from.
     :returns: dictionary with commands
     :rtype: dict
 
@@ -233,9 +278,9 @@ def parse_header(migration):
 
 
 def is_valid_command(string):
-    """Checks if a string is a valid Monarch command
+    """Checks if a string is a valid Monarch command.
 
-    :param string: string to verify
+    :param string: string to verify.
     :returns: true or false
     :rtype: bool
 
@@ -243,6 +288,13 @@ def is_valid_command(string):
     return string[:3] == '--!'
 
 def prompt_for_migrations(migrations):
+    """Asks for confirmation to apply the pending migrations.
+
+    :param migrations: List of migrations to ask on.
+    :returns: Whether to apply the migrations or not
+    :rtype: bool
+
+    """
     print(f'About to run {len(migrations)} on blah')
     for m in migrations:
         print(m['name'])
@@ -252,6 +304,12 @@ def prompt_for_migrations(migrations):
 
 
 def show_migrations():
+    """Prints applied migrations.
+
+    :returns: None
+    :rtype: None
+
+    """
     migrations = get_applied_migrations()
     print('        MIGRATIONS        ')
     print('--------------------------')
