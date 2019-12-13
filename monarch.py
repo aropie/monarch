@@ -19,8 +19,7 @@ _TARGET_DB_ENGINE = DBEngine.POSTGRES
 
 def main():
     parser = ArgumentParser(description='Simple db migrations manager')
-    parser.add_argument('-m', '--migrate', required=True,
-                        help='Migration file to run')
+    parser.add_argument('-m', '--migrate', help='Migration file to run')
     parser.add_argument('-n', '--dry', action='store_true',
                         help="Dry-run")
     parser.add_argument('-y', '--accept-all', action='store_true',
@@ -32,291 +31,293 @@ def main():
     parser.add_argument('--show', action='store_true',
                         help='Show all migrations applied')
     args = parser.parse_args()
-    init_meta()
-
-    if args.show:
-        show_migrations()
     arg_dict = {
-        'migration': args.migrate,
         'apply_migrations': not args.fake,
-        'register': not args.skip_register,
+        'register_migrations': not args.skip_register,
         'dry_run': args.dry,
         'accept_all': args.accept_all
     }
-    process_migration(**arg_dict)
 
+    manager = Monarch(**arg_dict)
+    manager.init_meta()
 
-def init_meta():
-    # TODO: add try-except
-    connection = get_db_connection(internal=True)
-    with connection:
-        curs = connection.cursor()
-        script = get_sql_script(_INIT_MIGRATION)
-        curs.execute(script)
-        connection.commit()
-
-
-def process_migration(migration,
-                    apply_migrations=True,
-                    register=True,
-                    dry_run=False,
-                    accept_all=False):
-    """Processes. a single migration.
-
-    :param migration: migration to process.
-    :param apply_migrations: if True, apply migrations to db.
-    :param register: If True, register migration to db.
-    :param dry_run: If True, just show what would be run on the db.
-    :param accept_all: If True, don't prompt for confirmation to migrate.
-    :returns: None
-    :rtype: None
-
-    """
-    migrations_to_run = get_migrations_to_run(migration)
-    run_migrations(migrations_to_run,
-                   apply_migrations=apply_migrations,
-                   register=register,
-                   dry_run=dry_run,
-                   accept_all=accept_all)
-
-
-def get_migrations_to_run(migration):
-    """Returns a list of migrations to apply, solving dependencies.
-
-    :param migration: migration to get dependencies from.
-    :returns: list of migrations to run.
-    :rtype: dict[]
-
-    """
-    migration_candidates = []
-    _solve_dependencies(migration, migration_candidates, seen=[])
-    applied_migrations = get_applied_migrations()
-    migrations_to_run = [m for m in migration_candidates
-                         if m['name'] not in applied_migrations]
-    return migrations_to_run
-
-
-def get_applied_migrations():
-    """Fetches a list of applied migrations from db.
-
-    :returns: list of applied migrations.
-    :rtype: string[]
-
-    """
-    # TODO: add try-except
-    connection = get_db_connection(internal=True)
-    with connection:
-        cursor = connection.cursor()
-        sql = 'SELECT name from migration;'
-        cursor.execute(sql)
-        migrations = cursor.fetchall()
-    return [m[0] for m in migrations]
-
-
-def run_migrations(migrations,
-                   apply_migrations=True,
-                   register=True,
-                   dry_run=False,
-                   accept_all=False):
-    """Applies a list of migrations to db.
-
-    :param migration: migration to process.
-    :param apply_migrations: if True, apply migrations to db.
-    :param register: If True, register migration to db.
-    :param dry_run: If True, just show what would be run on the db.
-    :param accept_all: If True, don't prompt for confirmation to migrate.
-    :returns: None
-    :rtype: None
-
-    """
-    for migration in migrations:
-        name = migration['name']
-        migration['script'] = get_sql_script(name)
-
-    if dry_run:
-        for migration in migrations:
-            print(f'------------------ {migration["name"]} ------------------')
-            print(migration['script'])
-        return
-
-    if not accept_all and not prompt_for_migrations(migrations):
-        return
-
-    connection = get_db_connection()
-    applied_migrations = []
-    with connection:
-        curs = connection.cursor()
-        for migration in migrations:
-            name = migration['name']
-            script = migration['script']
-            print('Applying {}'.format(name))
-            if apply_migrations:
-                curs.execute(script)
-            applied_migrations.append(name)
-        connection.commit()
-    if register:
-        register_migrations(applied_migrations)
-
-
-def register_migrations(migrations):
-    """Registers a list of migrations on the db.
-
-    :param migrations: List of migrations to register.
-    :returns: None
-    :rtype: None
-
-    """
-    # TODO: add try-except
-    connection = get_db_connection(internal=True)
-    with connection:
-        cursor = connection.cursor()
-        for migration in migrations:
-            cursor.execute("INSERT INTO migration (name) "
-                           "VALUES ('%s');" % migration)
-        connection.commit()
-
-
-def get_db_connection(internal=False):
-    """
-    Returns a connection to the required db.
-
-    :param internal: Whether the connection is for the internal db.
-    :returns: A connection object.
-    :rtype: Connection
-
-    """
-    # TODO: Improve this to be more flexible
-    if internal:
-        import sqlite3
-        engine_module = sqlite3
-        connection_params = {
-            'database': _INTERNAL_DB_FILE,
-            'isolation_level': 'DEFERRED',
-        }
+    if args.show:
+        manager.show_migrations()
+    elif args.migrate:
+      process_migration(args.migrate)
     else:
-        import psycopg2
-        engine_module = psycopg2
-        connection_params = {
-            'user': 'postgres',
-            'host': 'localhost',
-            'port': '5432',
-        }
-    try:
-        conn = engine_module.connect(**connection_params)
-    except Error as e:
-        print(e)
-    return conn
+      parser.parse_args(['--help'])
 
 
-def get_sql_script(migration):
-    """Gets sql script from a migration.
+class Monarch():
 
-    :param migration: migration to extract content from.
-    :returns: a sql script.
-    :rtype: string
-
+  def __init__(self, apply_migrations, register_migrations,
+             dry_run, accept_all):
     """
-    with open(migration, 'r') as f:
-        sql = " ".join(f.readlines())
-    return sql
+    Initialize Monarch manager object.
 
-
-def _solve_dependencies(migration, resolved, seen=None):
-    """Recursively solves dependency tree.
-
-    We use two auxiliary
-    accumulators: resolved and seen. A migration is considered
-    resolved when all its dependencies have been solved. A
-    circular dependency is discovered when a a migration has
-    already been walked through but its still not resolved
-
-    :param migration: migration to solve dependencies for.
-    :param resolved: aux accumulator. Traces solved dependencies.
-    :param seen: aux accumulator. Traces traversed depenencies.
-    :returns: None
-    :rtype: None
+    :param apply_migrations: if True, apply migrations to db.
+    :param register: If True, register migration to db.
+    :param dry_run: If True, just show what would be run on the db.
+    :param accept_all: If True, don't prompt for confirmation to migrate.
     """
-    if seen is None:
-        seen = []
-    seen.append({'name': migration})
-    commands = parse_header(migration)
-    for dependency in commands.get('depends_on', []):
-        if dependency not in {m['name'] for m in resolved}:
-            if dependency in {m['name'] for m in seen}:
-                raise ValueError(f'Circular dependency detected '
-                                 '{migration, dependency}')
-            _solve_dependencies(dependency, resolved, seen)
-    resolved.append({'name': migration, **commands})
+    self.apply_migrations = apply_migrations
+    self.register_migrations = register_migrations
+    self.dry_run = dry_run
+    self.accept_all = accept_all
 
 
-def parse_header(migration):
-    """Parses a migration header to be able to apply monarch's commands.
-
-    :param migration: migration to parse header from.
-    :returns: dictionary with commands
-    :rtype: dict
-
-    """
-    try:
-        with open(migration, 'r') as f:
-            line = f.readline()
-            if is_valid_command(line):
-                line = line[3:].strip()
-                try:
-                    commands = json.loads(line)
-                except JSONDecodeError as error:
-                    raise ValueError(
-                        f'"{line}" in {migration} '
-                        'is not a valid Monarch command'
-                    ) from error
-                return commands
-            return {}
-    except Exception as error:
-        raise RuntimeError(
-            f'parsing headers for {migration} failed'
-        ) from error
+  def init_meta(self):
+      # TODO: add try-except
+      connection = self.get_db_connection(internal=True)
+      with connection:
+          curs = connection.cursor()
+          script = self.get_sql_script(_INIT_MIGRATION)
+          curs.execute(script)
+          connection.commit()
 
 
-def is_valid_command(string):
-    """Checks if a string is a valid Monarch command.
+  def process_migration(self, migration):
+      """Processes. a single migration.
 
-    :param string: string to verify.
-    :returns: true or false
-    :rtype: bool
+      :param migration: migration to process.
+      :returns: None
+      :rtype: None
 
-    """
-    return string[:3] == '--!'
-
-def prompt_for_migrations(migrations):
-    """Asks for confirmation to apply the pending migrations.
-
-    :param migrations: List of migrations to ask on.
-    :returns: Whether to apply the migrations or not
-    :rtype: bool
-
-    """
-    print(f'About to run {len(migrations)} on blah')
-    for m in migrations:
-        print(m['name'])
-    response = input('Proceed? (Y/n) ').strip().lower()
-    print()
-    return (not response) or (response[0] == 'y')
+      """
+      migrations_to_run = self.get_migrations_to_run(migration)
+      self.run_migrations(migrations_to_run)
 
 
-def show_migrations():
-    """Prints applied migrations.
+  def get_migrations_to_run(self, migration):
+      """Returns a list of migrations to apply, solving dependencies.
 
-    :returns: None
-    :rtype: None
+      :param migration: migration to get dependencies from.
+      :returns: list of migrations to run.
+      :rtype: dict[]
 
-    """
-    migrations = get_applied_migrations()
-    print('        MIGRATIONS        ')
-    print('--------------------------')
-    for migration in migrations:
-        status = '✓'
-        print(f'{status} {migration}')
-    print(f'\n{len(migrations)} migrations applied')
+      """
+      migration_candidates = []
+      self._solve_dependencies(migration, migration_candidates, seen=[])
+      applied_migrations = get_applied_migrations()
+      migrations_to_run = [m for m in migration_candidates
+                          if m['name'] not in applied_migrations]
+      return migrations_to_run
+
+
+  def get_applied_migrations(self):
+      """Fetches a list of applied migrations from db.
+
+      :returns: list of applied migrations.
+      :rtype: string[]
+
+      """
+      # TODO: add try-except
+      connection = self.get_db_connection(internal=True)
+      with connection:
+          cursor = connection.cursor()
+          sql = 'SELECT name from migration;'
+          cursor.execute(sql)
+          migrations = cursor.fetchall()
+      return [m[0] for m in migrations]
+
+
+  def run_migrations(self, migrations):
+      """Applies a list of migrations to db.
+
+      :param migration: migration to process.
+      :returns: None
+      :rtype: None
+
+      """
+      for migration in migrations:
+          name = migration['name']
+          migration['script'] = self.get_sql_script(name)
+
+      if self.dry_run:
+          for migration in migrations:
+              print(f'------------------ {migration["name"]} ------------------')
+              print(migration['script'])
+          return
+
+      if not self.accept_all and not self.prompt_for_migrations(migrations):
+          return
+
+      connection = self.get_db_connection()
+      applied_migrations = []
+      with connection:
+          curs = connection.cursor()
+          for migration in migrations:
+              name = migration['name']
+              script = migration['script']
+              print('Applying {}'.format(name))
+              if self.apply_migrations:
+                  curs.execute(script)
+              self.applied_migrations.append(name)
+          connection.commit()
+      if self.register:
+          self.register_migrations(applied_migrations)
+
+
+  def register_migrations(self, migrations):
+      """Registers a list of migrations on the db.
+
+      :param migrations: List of migrations to register.
+      :returns: None
+      :rtype: None
+
+      """
+      # TODO: add try-except
+      connection = self.get_db_connection(internal=True)
+      with connection:
+          cursor = connection.cursor()
+          for migration in migrations:
+              cursor.execute("INSERT INTO migration (name) "
+                            "VALUES ('%s');" % migration)
+          connection.commit()
+
+
+  def get_db_connection(self, internal=False):
+      """
+      Returns a connection to the required db.
+
+      :param internal: Whether the connection is for the internal db.
+      :returns: A connection object.
+      :rtype: Connection
+
+      """
+      # TODO: Improve this to be more flexible
+      if internal:
+          import sqlite3
+          engine_module = sqlite3
+          connection_params = {
+              'database': _INTERNAL_DB_FILE,
+              'isolation_level': 'DEFERRED',
+          }
+      else:
+          import psycopg2
+          engine_module = psycopg2
+          connection_params = {
+              'user': 'postgres',
+              'host': 'localhost',
+              'port': '5432',
+          }
+      try:
+          conn = engine_module.connect(**connection_params)
+      except Error as e:
+          print(e)
+      return conn
+
+
+  def get_sql_script(self, migration):
+      """Gets sql script from a migration.
+
+      :param migration: migration to extract content from.
+      :returns: a sql script.
+      :rtype: string
+
+      """
+      with open(migration, 'r') as f:
+          sql = " ".join(f.readlines())
+      return sql
+
+
+  def _solve_dependencies(self, migration, resolved, seen=None):
+      """Recursively solves dependency tree.
+
+      We use two auxiliary
+      accumulators: resolved and seen. A migration is considered
+      resolved when all its dependencies have been solved. A
+      circular dependency is discovered when a a migration has
+      already been walked through but its still not resolved
+
+      :param migration: migration to solve dependencies for.
+      :param resolved: aux accumulator. Traces solved dependencies.
+      :param seen: aux accumulator. Traces traversed depenencies.
+      :returns: None
+      :rtype: None
+      """
+      if seen is None:
+          seen = []
+      seen.append({'name': migration})
+      commands = parse_header(migration)
+      for dependency in commands.get('depends_on', []):
+          if dependency not in {m['name'] for m in resolved}:
+              if dependency in {m['name'] for m in seen}:
+                  raise ValueError(f'Circular dependency detected '
+                                  '{migration, dependency}')
+              self._solve_dependencies(dependency, resolved, seen)
+      resolved.append({'name': migration, **commands})
+
+
+  def parse_header(self, migration):
+      """Parses a migration header to be able to apply monarch's commands.
+
+      :param migration: migration to parse header from.
+      :returns: dictionary with commands
+      :rtype: dict
+
+      """
+      try:
+          with open(migration, 'r') as f:
+              line = f.readline()
+              if is_valid_command(line):
+                  line = line[3:].strip()
+                  try:
+                      commands = json.loads(line)
+                  except JSONDecodeError as error:
+                      raise ValueError(
+                          f'"{line}" in {migration} '
+                          'is not a valid Monarch command'
+                      ) from error
+                  return commands
+              return {}
+      except Exception as error:
+          raise RuntimeError(
+              f'parsing headers for {migration} failed'
+          ) from error
+
+
+  def is_valid_command(self, string):
+      """Checks if a string is a valid Monarch command.
+
+      :param string: string to verify.
+      :returns: true or false
+      :rtype: bool
+
+      """
+      return string[:3] == '--!'
+
+  def prompt_for_migrations(self, migrations):
+      """Asks for confirmation to apply the pending migrations.
+
+      :param migrations: List of migrations to ask on.
+      :returns: Whether to apply the migrations or not
+      :rtype: bool
+
+      """
+      print(f'About to run {len(migrations)} on blah')
+      for m in migrations:
+          print(m['name'])
+      response = input('Proceed? (Y/n) ').strip().lower()
+      print()
+      return (not response) or (response[0] == 'y')
+
+
+  def show_migrations(self):
+      """Prints applied migrations.
+
+      :returns: None
+      :rtype: None
+
+      """
+      migrations = self.get_applied_migrations()
+      print('        MIGRATIONS        ')
+      print('--------------------------')
+      for migration in migrations:
+          status = '✓'
+          print(f'{status} {migration}')
+      print(f'\n{len(migrations)} migrations applied')
 
 
 
