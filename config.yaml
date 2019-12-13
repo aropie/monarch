@@ -1,0 +1,16 @@
+config:
+  internal_db: db_for_migrations
+  target_db: my_project_db
+
+engines:
+  db_for_migrations:
+    sqlite:
+        file: 'monarch.sql'
+
+  my_project_db:
+    postgresql:
+        dbname: 'mydb'
+        user: 'postgresql'
+        password: ''
+        host: 'localhost'
+        port: 5432
