@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from enum import Enum
 from json.decoder import JSONDecodeError
-from argparse import ArgumentParser
+import argparse
 import json
 import yaml
+
+_INIT_MIGRATION = 'migrations/meta.sql'
 
 
 class DBEngine(Enum):
@@ -11,15 +13,8 @@ class DBEngine(Enum):
     POSTGRES = 2
 
 
-# TODO: add config file
-_INIT_MIGRATION = 'migrations/meta.sql'
-_INTERNAL_DB_FILE = 'monarch.sql'
-_INTERNAL_DB_ENGINE = DBEngine.SQLITE
-_TARGET_DB_ENGINE = DBEngine.POSTGRES
-
-
 def main():
-    parser = ArgumentParser(description='Simple db migrations manager')
+    parser = argparse.ArgumentParser(description='Simple db migration manager')
     parser.add_argument('-m', '--migrate', help='Migration file to run')
     parser.add_argument('-n', '--dry', action='store_true', help='Dry-run')
     parser.add_argument('-y', '--accept-all', action='store_true',
@@ -30,9 +25,11 @@ def main():
                         help='Skip registering applied migrations')
     parser.add_argument('--show', action='store_true',
                         help='Show all migrations applied')
+    parser.add_argument('-c', '--config', nargs='?', default='config.yaml',
+                        type=argparse.FileType('r'), help='Config file to use')
     args = parser.parse_args()
     arg_dict = {
-        'config_file': 'config.yaml',
+        'config_file': args.config,
         'apply_migrations': not args.fake,
         'register_migrations': not args.skip_register,
         'dry_run': args.dry,
@@ -64,17 +61,16 @@ class Monarch:
 
         """
         def parse_config():
-            with open(config_file) as f:
-                config = yaml.load(f, Loader=yaml.Loader)
-            engines = config['engines']
+            config = yaml.load(config_file, Loader=yaml.Loader)
+            databases = config['databases']
             for db in ('internal_db', 'target_db'):
-                db_dict = engines[config['config'][db]]
+                db_dict = databases[config['config'][db]]
                 if 'sqlite' in db_dict:
                     db_settings = {
                         'engine': DBEngine.SQLITE,
                         'connection': db_dict['sqlite'],
                     }
-                elif'postgresql' in db_dict:
+                elif 'postgresql' in db_dict:
                     db_settings = {
                         'engine': DBEngine.POSTGRES,
                         'connection': db_dict['postgresql'],
