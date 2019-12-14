@@ -26,7 +26,7 @@ Migrations are single files that represent an atomic change to the DB's state.
 
   * **Dependencies must be declared at the header.** If a migration is not self-contained,
   i.e. it assumes a pre-existing state of the DB, all dependencies must be declared at the
-  header. [More on this header later.](https:github.com/aropie/monarch##header)
+  header. [More on this header later.](#header)
 
 
 ## Header
