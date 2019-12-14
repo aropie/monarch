@@ -2,7 +2,16 @@
 
 **M**igrati**ON** man**A**ge**R** with a bad a**C**ronym, du**H**
 
-Migration
+Over the last several projects I've worked, one of the main problems
+I've encountered is managing databases throughout different
+environments.  There are several migration managers out there, but all
+of them are overly bloated as most of them rely on ORMs, and where an
+overkill for what I really needed:
+- Track the state of the DB in different environments.
+- A simple way to transition from one state to another one.
+
+Hence, Monarch was created.
+
 
 ## Migrations
 Migrations are single files that represent an atomic change to the DB's state.
