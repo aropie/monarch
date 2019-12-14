@@ -5,7 +5,7 @@ config:
 engines:
   db_for_migrations:
     sqlite:
-        file: 'monarch.sql'
+        database: 'monarch.sql'
 
   my_project_db:
     postgresql:

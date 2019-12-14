@@ -3,6 +3,7 @@ from enum import Enum
 from json.decoder import JSONDecodeError
 from argparse import ArgumentParser
 import json
+import yaml
 
 
 class DBEngine(Enum):
@@ -44,6 +45,7 @@ def main():
     )
     args = parser.parse_args()
     arg_dict = {
+        "config_file": 'config.yaml',
         "apply_migrations": not args.fake,
         "register_migrations": not args.skip_register,
         "dry_run": args.dry,
@@ -56,25 +58,49 @@ def main():
     if args.show:
         manager.show_migrations()
     elif args.migrate:
-        process_migration(args.migrate)
+        manager.process_migration(args.migrate)
     else:
         parser.parse_args(["--help"])
 
 
 class Monarch:
-    def __init__(self, apply_migrations, register_migrations, dry_run, accept_all):
-        """
-    Initialize Monarch manager object.
+    def __init__(self, config_file, apply_migrations, register_migrations,
+                 dry_run, accept_all):
+        """ Initialize Monarch manager object.
 
-    :param apply_migrations: if True, apply migrations to db.
-    :param register: If True, register migration to db.
-    :param dry_run: If True, just show what would be run on the db.
-    :param accept_all: If True, don't prompt for confirmation to migrate.
-    """
+        :param config_file: Yaml config file.
+        :param apply_migrations: if True, apply migrations to db.
+        :param register_migrations: If True, register migration to db.
+        :param dry_run: If True, just show what would be run on the db.
+        :param accept_all: If True, don't prompt for confirmation to migrate.
+
+
+        """
+        def parse_config():
+            with open(config_file) as f:
+                config = yaml.load(f, Loader=yaml.Loader)
+            engines = config['engines']
+            for db in ('internal_db', 'target_db'):
+                db_dict = engines[config['config'][db]]
+                if 'sqlite' in db_dict:
+                    db_settings = {
+                        'engine': DBEngine.SQLITE,
+                        'connection': db_dict['sqlite'],
+                    }
+                elif'postgresql' in db_dict:
+                    db_settings = {
+                        'engine': DBEngine.POSTGRES,
+                        'connection': db_dict['postgresql'],
+                    }
+                else:
+                    raise ValueError('Db bad config')
+                setattr(self, db, db_settings)
+
         self.apply_migrations = apply_migrations
         self.register_migrations = register_migrations
         self.dry_run = dry_run
         self.accept_all = accept_all
+        parse_config()
 
     def init_meta(self):
         # TODO: add try-except
@@ -106,7 +132,7 @@ class Monarch:
       """
         migration_candidates = []
         self._solve_dependencies(migration, migration_candidates, seen=[])
-        applied_migrations = get_applied_migrations()
+        applied_migrations = self.get_applied_migrations()
         migrations_to_run = [
             m for m in migration_candidates if m["name"] not in applied_migrations
         ]
@@ -192,25 +218,16 @@ class Monarch:
 
       """
         # TODO: Improve this to be more flexible
-        if internal:
+        db_settings = self.internal_db if internal else self.target_db
+        print(db_settings)
+        if db_settings['engine'] == DBEngine.SQLITE:
             import sqlite3
-
             engine_module = sqlite3
-            connection_params = {
-                "database": _INTERNAL_DB_FILE,
-                "isolation_level": "DEFERRED",
-            }
-        else:
+        elif db_settings['engine'] == DBEngine.POSTGRES:
             import psycopg2
-
             engine_module = psycopg2
-            connection_params = {
-                "user": "postgres",
-                "host": "localhost",
-                "port": "5432",
-            }
         try:
-            conn = engine_module.connect(**connection_params)
+            conn = engine_module.connect(**db_settings['connection'])
         except Error as e:
             print(e)
         return conn
@@ -245,7 +262,7 @@ class Monarch:
         if seen is None:
             seen = []
         seen.append({"name": migration})
-        commands = parse_header(migration)
+        commands = self.parse_header(migration)
         for dependency in commands.get("depends_on", []):
             if dependency not in {m["name"] for m in resolved}:
                 if dependency in {m["name"] for m in seen}:
@@ -266,7 +283,7 @@ class Monarch:
         try:
             with open(migration, "r") as f:
                 line = f.readline()
-                if is_valid_command(line):
+                if self.is_valid_command(line):
                     line = line[3:].strip()
                     try:
                         commands = json.loads(line)
