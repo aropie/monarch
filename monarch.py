@@ -27,13 +27,23 @@ def main():
                         help='Show all migrations applied')
     parser.add_argument('-c', '--config', nargs='?', default='config.yaml',
                         type=argparse.FileType('r'), help='Config file to use')
+    parser.add_argument('-t', '--transactional', action='store_true',
+                        help='Run every migration as a single transaction')
+    parser.add_argument('--ignore_applied', action='store_true',
+                        help='Ignore previously applied migrations')
     args = parser.parse_args()
+
+    # TODO: Implement -t flag behavior
+    if args.transactional:
+        raise NotImplementedError('This feature has not been implemented yet')
+
     arg_dict = {
         'config_file': args.config,
         'apply_migrations': not args.fake,
         'register_migrations': not args.skip_register,
         'dry_run': args.dry,
         'accept_all': args.accept_all,
+        'ignore_applied': args.ignore_applied,
     }
 
     manager = Monarch(**arg_dict)
@@ -49,7 +59,7 @@ def main():
 
 class Monarch:
     def __init__(self, config_file, apply_migrations, register_migrations,
-                 dry_run, accept_all):
+                 dry_run, accept_all, ignore_applied):
         """ Initialize Monarch manager object.
 
         :param config_file: Yaml config file.
@@ -57,7 +67,7 @@ class Monarch:
         :param register_migrations: If True, register migration to db.
         :param dry_run: If True, just show what would be run on the db.
         :param accept_all: If True, don't prompt for confirmation to migrate.
-
+        :param ignore_applied: Ignore previously applied migrations.
 
         """
         def parse_config():
@@ -115,9 +125,11 @@ class Monarch:
       """
         migration_candidates = []
         self._solve_dependencies(migration, migration_candidates, seen=[])
-        applied_migrations = self.get_applied_migrations()
+        applied_migrations = (self.get_applied_migrations()
+                              if not self.ignore_applied else [])
         migrations_to_run = [
-            m for m in migration_candidates if m['name'] not in applied_migrations
+            m for m in migration_candidates
+            if m['name'] not in applied_migrations
         ]
         return migrations_to_run
 
@@ -151,7 +163,7 @@ class Monarch:
 
         if self.dry_run:
             for migration in migrations:
-                print(f'------------------ {migration["name"]} ------------------')
+                print(f'---------------- {migration["name"]} ----------------')
                 print(migration['script'])
             return
 
