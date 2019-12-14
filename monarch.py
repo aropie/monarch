@@ -12,44 +12,31 @@ class DBEngine(Enum):
 
 
 # TODO: add config file
-_INIT_MIGRATION = "migrations/meta.sql"
-_INTERNAL_DB_FILE = "monarch.sql"
+_INIT_MIGRATION = 'migrations/meta.sql'
+_INTERNAL_DB_FILE = 'monarch.sql'
 _INTERNAL_DB_ENGINE = DBEngine.SQLITE
 _TARGET_DB_ENGINE = DBEngine.POSTGRES
 
 
 def main():
-    parser = ArgumentParser(description="Simple db migrations manager")
-    parser.add_argument("-m", "--migrate", help="Migration file to run")
-    parser.add_argument("-n", "--dry", action="store_true", help="Dry-run")
-    parser.add_argument(
-        "-y",
-        "--accept-all",
-        action="store_true",
-        help="Do not prompt before applying migrations",
-    )
-    parser.add_argument(
-        "-f",
-        "--fake",
-        action="store_true",
-        help="Skip migrations and register them as applied",
-    )
-    parser.add_argument(
-        "-r",
-        "--skip-register",
-        action="store_true",
-        help="Skip registering applied migrations",
-    )
-    parser.add_argument(
-        "--show", action="store_true", help="Show all migrations applied"
-    )
+    parser = ArgumentParser(description='Simple db migrations manager')
+    parser.add_argument('-m', '--migrate', help='Migration file to run')
+    parser.add_argument('-n', '--dry', action='store_true', help='Dry-run')
+    parser.add_argument('-y', '--accept-all', action='store_true',
+                        help='Do not prompt before applying migrations')
+    parser.add_argument('-f', '--fake', action='store_true',
+                        help='Skip migrations and register them as applied')
+    parser.add_argument('-r', '--skip-register', action='store_true',
+                        help='Skip registering applied migrations')
+    parser.add_argument('--show', action='store_true',
+                        help='Show all migrations applied')
     args = parser.parse_args()
     arg_dict = {
-        "config_file": 'config.yaml',
-        "apply_migrations": not args.fake,
-        "register_migrations": not args.skip_register,
-        "dry_run": args.dry,
-        "accept_all": args.accept_all,
+        'config_file': 'config.yaml',
+        'apply_migrations': not args.fake,
+        'register_migrations': not args.skip_register,
+        'dry_run': args.dry,
+        'accept_all': args.accept_all,
     }
 
     manager = Monarch(**arg_dict)
@@ -60,7 +47,7 @@ def main():
     elif args.migrate:
         manager.process_migration(args.migrate)
     else:
-        parser.parse_args(["--help"])
+        parser.parse_args(['--help'])
 
 
 class Monarch:
@@ -134,7 +121,7 @@ class Monarch:
         self._solve_dependencies(migration, migration_candidates, seen=[])
         applied_migrations = self.get_applied_migrations()
         migrations_to_run = [
-            m for m in migration_candidates if m["name"] not in applied_migrations
+            m for m in migration_candidates if m['name'] not in applied_migrations
         ]
         return migrations_to_run
 
@@ -149,7 +136,7 @@ class Monarch:
         connection = self.get_db_connection(internal=True)
         with connection:
             cursor = connection.cursor()
-            sql = "SELECT name from migration;"
+            sql = 'SELECT name from migration;'
             cursor.execute(sql)
             migrations = cursor.fetchall()
         return [m[0] for m in migrations]
@@ -163,13 +150,13 @@ class Monarch:
 
       """
         for migration in migrations:
-            name = migration["name"]
-            migration["script"] = self.get_sql_script(name)
+            name = migration['name']
+            migration['script'] = self.get_sql_script(name)
 
         if self.dry_run:
             for migration in migrations:
                 print(f'------------------ {migration["name"]} ------------------')
-                print(migration["script"])
+                print(migration['script'])
             return
 
         if not self.accept_all and not self.prompt_for_migrations(migrations):
@@ -180,9 +167,9 @@ class Monarch:
         with connection:
             curs = connection.cursor()
             for migration in migrations:
-                name = migration["name"]
-                script = migration["script"]
-                print("Applying {}".format(name))
+                name = migration['name']
+                script = migration['script']
+                print('Applying {}'.format(name))
                 if self.apply_migrations:
                     curs.execute(script)
                 self.applied_migrations.append(name)
@@ -204,7 +191,7 @@ class Monarch:
             cursor = connection.cursor()
             for migration in migrations:
                 cursor.execute(
-                    "INSERT INTO migration (name) " "VALUES ('%s');" % migration
+                    'INSERT INTO migration (name) ' 'VALUES ("%s");' % migration
                 )
             connection.commit()
 
@@ -240,7 +227,7 @@ class Monarch:
       :rtype: string
 
       """
-        with open(migration, "r") as f:
+        with open(migration, 'r') as f:
             sql = " ".join(f.readlines())
         return sql
 
@@ -261,16 +248,16 @@ class Monarch:
       """
         if seen is None:
             seen = []
-        seen.append({"name": migration})
+        seen.append({'name': migration})
         commands = self.parse_header(migration)
-        for dependency in commands.get("depends_on", []):
-            if dependency not in {m["name"] for m in resolved}:
-                if dependency in {m["name"] for m in seen}:
+        for dependency in commands.get('depends_on', []):
+            if dependency not in {m['name'] for m in resolved}:
+                if dependency in {m['name'] for m in seen}:
                     raise ValueError(
-                        f"Circular dependency detected " "{migration, dependency}"
+                        f'Circular dependency detected ' "{migration, dependency}"
                     )
                 self._solve_dependencies(dependency, resolved, seen)
-        resolved.append({"name": migration, **commands})
+        resolved.append({'name': migration, **commands})
 
     def parse_header(self, migration):
         """Parses a migration header to be able to apply monarch's commands.
@@ -281,7 +268,7 @@ class Monarch:
 
       """
         try:
-            with open(migration, "r") as f:
+            with open(migration, 'r') as f:
                 line = f.readline()
                 if self.is_valid_command(line):
                     line = line[3:].strip()
@@ -289,12 +276,12 @@ class Monarch:
                         commands = json.loads(line)
                     except JSONDecodeError as error:
                         raise ValueError(
-                            f'"{line}" in {migration} ' "is not a valid Monarch command"
+                            f'"{line}" in {migration} is not a valid Monarch command'
                         ) from error
                     return commands
                 return {}
         except Exception as error:
-            raise RuntimeError(f"parsing headers for {migration} failed") from error
+            raise RuntimeError(f'parsing headers for {migration} failed') from error
 
     def is_valid_command(self, string):
         """Checks if a string is a valid Monarch command.
@@ -314,12 +301,12 @@ class Monarch:
       :rtype: bool
 
       """
-        print(f"About to run {len(migrations)} on blah")
+        print(f'About to run {len(migrations)} on blah')
         for m in migrations:
-            print(m["name"])
-        response = input("Proceed? (Y/n) ").strip().lower()
+            print(m['name'])
+        response = input('Proceed? (Y/n) ').strip().lower()
         print()
-        return (not response) or (response[0] == "y")
+        return (not response) or (response[0] == 'y')
 
     def show_migrations(self):
         """Prints applied migrations.
@@ -329,13 +316,13 @@ class Monarch:
 
       """
         migrations = self.get_applied_migrations()
-        print("        MIGRATIONS        ")
-        print("--------------------------")
+        print('        MIGRATIONS        ')
+        print('--------------------------')
         for migration in migrations:
             status = "✓"
-            print(f"{status} {migration}")
-        print(f"\n{len(migrations)} migrations applied")
+            print(f'{status} {migration}')
+        print(f'\n{len(migrations)} migrations applied')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
