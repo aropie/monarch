@@ -8,7 +8,10 @@ environments.  There are several migration managers out there, but all
 of them are overly bloated as most of them rely on ORMs, and were an
 overkill for what I really needed:
 - Track the state of the DB in different environments.
+- Flexibility to work on different DB engines.
 - A simple way to transition from one state to another one.
+- A sane way to manage in what order the migrations should be applied
+  (other than the usual file-naming by numbers).
 
 Hence, Monarch was created.
 
@@ -31,7 +34,7 @@ Migrations are single files that represent an atomic change to the DB's state.
 
 ## Header
 The header is where Monarch figures out how to handle the migration. A valid Monarch header
-starts with '--!' and then the declaration which is json-formatted in the following manner:
+starts with `--!` and then the declaration which is json-formatted in the following manner:
 `{command1: value, command2: value, ...}`.
 
 The existing commands are all that follow:
