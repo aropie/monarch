@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
-from json.decoder import JSONDecodeError
 import argparse
 import json
-from sqlalchemy import create_engine
+from json.decoder import JSONDecodeError
 from os import getenv, listdir
 from os.path import join, splitext, isfile
+from sqlalchemy.sql import func
+from sqlalchemy import (create_engine, MetaData, Table,
+                        Column, Integer, String, DateTime)
 
 _INTERNAL_DB_URL = getenv('INTERNAL_DB_URL')
 _TARGET_DB_URL = getenv('TARGET_DB_URL')
-
-_INIT_MIGRATION = '''
-CREATE TABLE IF NOT EXISTS migration (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  applied_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-'''
 
 
 def main():
@@ -88,8 +82,15 @@ class Monarch:
         self.target_db = create_engine(_TARGET_DB_URL)
 
     def init_meta(self):
-        with self.internal_db.begin() as conn:
-            conn.execute(_INIT_MIGRATION)
+        # We use SQL Expression Language to initialize the internal db
+        # in order to avoid problems with different type names across
+        # different engines.
+        metadata = MetaData()
+        Table('migration', metadata,
+              Column('id', Integer, primary_key=True),
+              Column('name', String),
+              Column('applied_on', DateTime, server_default=func.now()))
+        metadata.create_all(self.internal_db)
 
     def process_migration(self, migration):
         """Processes. a single migration.
@@ -192,7 +193,7 @@ class Monarch:
             for migration in migrations:
                 conn.execute(
                     'INSERT INTO migration (name) '
-                    'VALUES ("%s");' % migration
+                    'VALUES (\'%s\');' % migration
                 )
 
     def get_sql_script(self, migration):
