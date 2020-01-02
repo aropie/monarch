@@ -4,10 +4,12 @@ import json
 from json.decoder import JSONDecodeError
 from os import getenv, listdir
 from os.path import join, splitext, isfile
+from dotenv import load_dotenv
 from sqlalchemy.sql import func
 from sqlalchemy import (create_engine, MetaData, Table,
                         Column, Integer, String, DateTime)
 
+load_dotenv()
 _INTERNAL_DB_URL = getenv('INTERNAL_DB_URL')
 _TARGET_DB_URL = getenv('TARGET_DB_URL')
 

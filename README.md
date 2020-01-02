@@ -62,7 +62,7 @@ CREATE TABLE person(
 monarch.py is the actual migration manager. Run it
 through `python3 monarch.py`. It automatically computes and processess
 all needed migration dependencies.
-``` usage:
+``` sh
 usage: monarch.py [-h] [-m MIGRATE] [-n] [-y] [-f] [-r] [--show] [-c [CONFIG]]
 
 Simple db migration manager
@@ -109,8 +109,11 @@ are supported by Monarch as well, which covers all of the most common DB choices
 To configure the database connections, [a database url](https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls)
 is used,which is defined through environment variables.
 Simply set `INTERNAL_DB_URL` and `TARGET_DB_URL` and you're ready to go:
-```
+```sh
 # Both of these could point to the same db.
 export INTERNAL_DB_URL='sqlite:///internal.db'
 export TARGET_DB_URL='postgresql://postgres:@localhost'
 ```
+
+To allow for different development environments, a `.env` can also be supplied to set
+the corresponding environment variables.
