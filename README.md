@@ -16,6 +16,20 @@ overkill for what I really needed:
 
 Hence, Monarch was created.
 
+## Installation
+
+### Linux and MacOS
+```shell
+# Download the binary
+$ sudo curl -fsSL -o /usr/local/bin/monarch https://github.com/aropie/monarch/releases/download/v1.0/monarch
+
+# Make it executable
+$ sudo chmod +x /usr/local/bin/monarch
+```
+
+### Windows
+Not available yet :(
+
 
 ## Migrations
 Migrations are single files that represent an atomic change to the DB's state.
@@ -33,6 +47,49 @@ Migrations are single files that represent an atomic change to the DB's state.
 
 Migrations are looked for in the migrations dir, `migrations` by default.
 This can be changed with the `-d` flag.
+
+## Usage
+``` sh
+# Run a single migration
+$ ./monarch -m some-pending-migrations.sql
+
+# Or run all available migrations
+$ ./monarch -a
+```
+
+It's important to note that Monarch runs all the migrations requested (be it a single migration
+and its dependencies or a whole schema) as a single transaction. This means that if you are applying
+migrations 1 through 5 and no. 3 breaks the DB state, all changes are rolled back and none of the 5 migrations
+are applied. To override this behavior, run the migration with `-t`. With the `-t` flag, if migration
+3 breaks the DB state, migrations 1 and 2 will already be applied and saved.
+
+Monarch saves the current DB state through a `migrations` table, in order to know which migrations
+are needed to move from one state to another. You can make Monarch ignore
+previously applied migrations with `-ignore-applied`, and avoid new migrations being registered
+into the DB with `-skip-register`, or only register migrations without actually applying them with
+`--fake`.
+
+## Database connection
+Monarch functions on two different databases: an internal one to save the applied migrations, and
+a target database, which is the one where the migrations will actually be applied.
+
+One of the objectives of Monarch is to be database-agnostic.
+Internally, Monarch uses SQLAlchemy to handle the connections with the databases.
+This means that [all the databases supported by SQLAlchemy](https://docs.sqlalchemy.org/en/13/core/engines.html#supported-databases)
+are supported by Monarch as well, which covers all of the most common DB choices
+(MySQL, PostgreSQL, SQLite, Oracle, Microsoft SQL Server).
+
+To configure the database connections, [a database url](https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls)
+is used,which is defined through environment variables.
+Simply set `INTERNAL_DB_URL` and `TARGET_DB_URL` and you're ready to go:
+```sh
+# Both of these could point to the same db.
+$ export INTERNAL_DB_URL='sqlite:///internal.db'
+$ export TARGET_DB_URL='postgresql://postgres:@localhost'
+```
+
+To allow for different development environments, a `.env` can also be supplied to set
+the corresponding environment variables.
 
 
 ## Header
@@ -75,47 +132,3 @@ If later you have a third migration `my_third_migration.sql` which depends on `s
 Note that we're not declaring `first_migration.sql` as a dependency here because `second_migration.sql`
 already has it listed, so Monarch will traverse the dependency tree and apply all necessary migrations
 when migrating `third_migration.sql`.
-
-
-## Usage
-``` sh
-# Run a single migration
-./monarch -m some-pending-migrations.sql
-
-# Or ran all available migrations
-./monarch -a
-```
-
-It's important to note that Monarch runs all the migrations requested (be it a single migration
-and its dependencies or a whole schema) as a single transaction. This means that if you are applying
-migrations 1 through 5 and no. 3 breaks the DB state, all changes are rolled back and none of the 5 migrations
-are applied. To override this behavior, run the migration with `-t`. With the `-t` flag, if migration
-3 breaks the DB state, migrations 1 and 2 will already be applied and saved.
-
-Monarch saves the current DB state through a `migrations` table, in order to know which migrations
-are needed to move from one state to another. You can make Monarch ignore
-previously applied migrations with `-ignore-applied`, and avoid new migrations being registered
-into the DB with `-skip-register`, or only register migrations without actually applying them with
-`--fake`.
-
-## Database connection
-Monarch functions on two different databases: an internal one to save the applied migrations, and
-a target database, which is the one where the migrations will actually be applied.
-
-One of the objectives of Monarch is to be database-agnostic.
-Internally, Monarch uses SQLAlchemy to handle the connections with the databases.
-This means that [all the databases supported by SQLAlchemy](https://docs.sqlalchemy.org/en/13/core/engines.html#supported-databases)
-are supported by Monarch as well, which covers all of the most common DB choices
-(MySQL, PostgreSQL, SQLite, Oracle, Microsoft SQL Server).
-
-To configure the database connections, [a database url](https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls)
-is used,which is defined through environment variables.
-Simply set `INTERNAL_DB_URL` and `TARGET_DB_URL` and you're ready to go:
-```sh
-# Both of these could point to the same db.
-export INTERNAL_DB_URL='sqlite:///internal.db'
-export TARGET_DB_URL='postgresql://postgres:@localhost'
-```
-
-To allow for different development environments, a `.env` can also be supplied to set
-the corresponding environment variables.
