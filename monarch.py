@@ -9,7 +9,8 @@ from sqlalchemy.sql import func
 from sqlalchemy import (create_engine, MetaData, Table,
                         Column, Integer, String, DateTime)
 
-load_dotenv()
+if isfile('.env'):
+    load_dotenv('.env')
 _INTERNAL_DB_URL = getenv('INTERNAL_DB_URL')
 _TARGET_DB_URL = getenv('TARGET_DB_URL')
 
