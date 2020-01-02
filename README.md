@@ -76,32 +76,17 @@ Note that we're not declaring `first_migration.sql` as a dependency here because
 already has it listed, so Monarch will traverse the dependency tree and apply all necessary migrations
 when migrating `third_migration.sql`.
 
-## Monarch.py
 
-`monarch` is the actual migration manager. Run it
-through `./monarch`. It automatically computes and processess
-all needed migration dependencies.
+## Usage
 ``` sh
-usage: monarch [-h] [-m MIGRATE] [-n] [-y] [-f] [-r] [--show] [-c [CONFIG]]
+# Run a single migration
+./monarch -m some-pending-migrations.sql
 
-Simple db migration manager
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -m MIGRATE, --migrate MIGRATE
-                        Migration file to run
-  -d MIGRATIONS_DIR, --migrations-dir MIGRATIONS_DIR
-     		     	Migrations directory
-  -n, --dry             Dry-run
-  -y, --accept-all      Do not prompt before applying migrations
-  -f, --fake            Skip migrations and register them as applied
-  -r, --skip-register   Skip registering applied migrations
-  --show                Show all migrations applied
-  -t, --transactional   Run every migration as a single transaction
-  --ignore_applied      Ignore previously applied migrations
+# Or ran all available migrations
+./monarch -a
 ```
 
-Also, is important to note that Monarch runs all the migrations requested (be it a single migration
+It's important to note that Monarch runs all the migrations requested (be it a single migration
 and its dependencies or a whole schema) as a single transaction. This means that if you are applying
 migrations 1 through 5 and no. 3 breaks the DB state, all changes are rolled back and none of the 5 migrations
 are applied. To override this behavior, run the migration with `-t`. With the `-t` flag, if migration

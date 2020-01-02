@@ -17,6 +17,8 @@ _TARGET_DB_URL = getenv('TARGET_DB_URL')
 def main():
     parser = argparse.ArgumentParser(description='Simple db migration manager')
     parser.add_argument('-m', '--migrate', help='Migration file to run')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='Run all available migrations')
     parser.add_argument('-d', '--migrations-dir', help='Migrations directory',
                         default='migrations')
     parser.add_argument('-n', '--dry', action='store_true', help='Dry-run')
@@ -54,6 +56,8 @@ def main():
         manager.show_migrations()
     elif args.migrate:
         manager.process_migration(args.migrate)
+    elif args.all:
+        manager.process_all_migrations()
     else:
         parser.parse_args(['--help'])
 
@@ -95,7 +99,7 @@ class Monarch:
         metadata.create_all(self.internal_db)
 
     def process_migration(self, migration):
-        """Processes. a single migration.
+        """Processes a single migration.
 
       :param migration: migration to process.
       :returns: None
@@ -105,18 +109,34 @@ class Monarch:
         migrations_to_run = self.get_migrations_to_run(migration)
         self.run_migrations(migrations_to_run)
 
+    def process_all_migrations(self):
+        """Processes all available migrations.
+
+            :returns:  None
+            :rtype: None
+
+            """
+        available_migrations = self.get_available_migrations()
+        candidates = []
+        for migration in available_migrations:
+            candidates += self.get_migrations_to_run(migration)
+        # Remove duplicates after all the migrations have been processed
+        # to lower time complexity.
+        migrations_to_run = list(dict.fromkeys(candidates))
+        self.run_migrations(migrations_to_run)
+
     def get_migrations_to_run(self, migration):
         """Returns a list of migrations to apply, solving dependencies.
 
-      :param migration: migration to get dependencies from.
-      :returns: list of migrations to run.
-      :rtype: dict[]
+        :param migration: migration to get dependencies from.
+        :returns: list of migrations to run.
+        :rtype: dict[]
 
-      """
+        """
         migration_candidates = []
         self._solve_dependencies(migration, migration_candidates, seen=[])
         applied_migrations = (self.get_applied_migrations()
-                              if not self.ignore_applied else [])
+                                if not self.ignore_applied else [])
         migrations_to_run = [
             m for m in migration_candidates
             if m['name'] not in applied_migrations
