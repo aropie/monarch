@@ -8,8 +8,8 @@ environments.  There are several migration managers out there, but all
 of them are overly bloated as most of them rely on ORMs, and were an
 overkill for what I really needed:
 - Track the state of the DB in different environments.
-- Flexibility to work on different DB engines.
-- A simple way to transition from one state to another one.
+- A DB-agnostic tool, providing flexibility to work on different DB engines.
+- A simple way to transition from one DB state to another one.
 - A sane way to manage in what order the migrations should be applied
   (other than the usual file-naming by numbers).
 
@@ -31,6 +31,9 @@ Migrations are single files that represent an atomic change to the DB's state.
   i.e. it assumes a pre-existing state of the DB, all dependencies must be declared at the
   header. [More on this header later.](#header)
 
+All migrations are looked for in the migrations dir, `migrations` by default.
+This can be changed with the `-d` flag.
+
 
 ## Header
 The header is where Monarch figures out how to handle the migration. A valid Monarch header
@@ -45,7 +48,7 @@ And that's all.
 
 ### Example migration
 ```sql
---! {"depends_on": ["some/path/start_up_db.sql", "other/path/delete_a_table.sql"]}
+--! {"depends_on": ["start_up_db.sql", "delete_a_table.sql"]}
 
 CREATE TABLE person(
    id INTEGER,
@@ -68,6 +71,8 @@ optional arguments:
   -h, --help            show this help message and exit
   -m MIGRATE, --migrate MIGRATE
                         Migration file to run
+  -d MIGRATIONS_DIR, --migrations-dir MIGRATIONS_DIR
+     		     	Migrations directory
   -n, --dry             Dry-run
   -y, --accept-all      Do not prompt before applying migrations
   -f, --fake            Skip migrations and register them as applied
@@ -91,5 +96,21 @@ previously applied migrations with `-ignore-applied`, and avoid new migrations b
 into the DB with `-skip-register`, or only register migrations without actually applying them with
 `--fake`.
 
-## Config file
-Write about this later
+## Database connection
+Monarch functions on two different databases: an internal one to save the applied migrations, and
+a target database, which is the one where the migrations will actually be applied.
+
+One of the objectives of Monarch is to be database-agnostic.
+Internally, Monarch uses SQLAlchemy to handle the connections with the databases.
+This means that [all the databases supported by SQLAlchemy](https://docs.sqlalchemy.org/en/13/core/engines.html#supported-databases)
+are supported by Monarch as well, which covers all of the most common DB choices
+(MySQL, PostgreSQL, SQLite, Oracle, Microsoft SQL Server).
+
+To configure the database connections, [a database url](https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls)
+is used,which is defined through environment variables.
+Simply set `INTERNAL_DB_URL` and `TARGET_DB_URL` and you're ready to go:
+```
+# Both of these could point to the same db.
+export INTERNAL_DB_URL='sqlite:///internal.db'
+export TARGET_DB_URL='postgresql://postgres:@localhost'
+```
