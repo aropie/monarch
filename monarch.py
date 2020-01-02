@@ -3,10 +3,11 @@ from json.decoder import JSONDecodeError
 import argparse
 import json
 from sqlalchemy import create_engine
-import os
+from os import getenv, listdir
+from os.path import join, splitext, isfile
 
-_INTERNAL_DB_URL = os.environ.get('INTERNAL_DB_URL')
-_TARGET_DB_URL = os.environ.get('TARGET_DB_URL')
+_INTERNAL_DB_URL = getenv('INTERNAL_DB_URL')
+_TARGET_DB_URL = getenv('TARGET_DB_URL')
 
 _INIT_MIGRATION = '''
 CREATE TABLE IF NOT EXISTS migration (
@@ -20,6 +21,8 @@ CREATE TABLE IF NOT EXISTS migration (
 def main():
     parser = argparse.ArgumentParser(description='Simple db migration manager')
     parser.add_argument('-m', '--migrate', help='Migration file to run')
+    parser.add_argument('-d', '--migrations-dir', help='Migrations directory',
+                        default='migrations')
     parser.add_argument('-n', '--dry', action='store_true', help='Dry-run')
     parser.add_argument('-y', '--accept-all', action='store_true',
                         help='Do not prompt before applying migrations')
@@ -40,6 +43,7 @@ def main():
         raise NotImplementedError('This feature has not been implemented yet')
 
     arg_dict = {
+        'migrations_dir': args.migrations_dir,
         'apply_migrations': not args.fake,
         'register_migrations': not args.skip_register,
         'dry_run': args.dry,
@@ -59,10 +63,11 @@ def main():
 
 
 class Monarch:
-    def __init__(self, apply_migrations, register_migrations,
+    def __init__(self, migrations_dir, apply_migrations, register_migrations,
                  dry_run, accept_all, ignore_applied):
         """ Initialize Monarch manager object.
 
+        :param migrations_dir: Directory to look into for migrations.
         :param apply_migrations: if True, apply migrations to db.
         :param register_migrations: If True, register migration to db.
         :param dry_run: If True, just show what would be run on the db.
@@ -70,7 +75,7 @@ class Monarch:
         :param ignore_applied: Ignore previously applied migrations.
 
         """
-
+        self.migrations_dir = migrations_dir
         self.apply_migrations = apply_migrations
         self.register = register_migrations
         self.dry_run = dry_run
@@ -126,6 +131,21 @@ class Monarch:
             sql = 'SELECT name from migration;'
             migrations = conn.execute(sql).fetchall()
         return [m[0] for m in migrations]
+
+    def get_available_migrations(self):
+        """Returns a set of migrations available.
+
+        :returns: list of migrations available
+        :rtype: string[]
+
+        """
+        migrations = set()
+        for f in listdir(self.migrations_dir):
+            if (isfile(
+                    join(self.migrations_dir, f)
+            ) and splitext(f)[-1]) == '.sql':
+                migrations.add(f)
+        return migrations
 
     def run_migrations(self, migrations):
         """Applies a list of migrations to db.
@@ -183,7 +203,7 @@ class Monarch:
       :rtype: string
 
       """
-        with open(migration, 'r') as f:
+        with open(join(self.migrations_dir, migration), 'r') as f:
             sql = " ".join(f.readlines())
         return sql
 
@@ -225,7 +245,7 @@ class Monarch:
 
       """
         try:
-            with open(migration, 'r') as f:
+            with open(join(self.migrations_dir, migration), 'r') as f:
                 line = f.readline()
                 if self.is_valid_command(line):
                     line = line[3:].strip()
@@ -274,13 +294,15 @@ class Monarch:
       :rtype: None
 
       """
-        migrations = self.get_applied_migrations()
+        migrations = set(self.get_available_migrations())
+        applied_migrations = self.get_applied_migrations()
         print('        MIGRATIONS        ')
         print('--------------------------')
         for migration in migrations:
-            status = "✓"
+            status = '✓' if migration in applied_migrations else '⨯'
             print(f'{status} {migration}')
-        print(f'\n{len(migrations)} migrations applied')
+        print(f'\n{len(applied_migrations)}/{len(migrations)} '
+              'migrations applied')
 
 
 if __name__ == '__main__':
