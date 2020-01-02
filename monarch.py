@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-from enum import Enum
 from json.decoder import JSONDecodeError
 import argparse
 import json
-import yaml
+from sqlalchemy import create_engine
+import os
 
 _INIT_MIGRATION = 'migrations/meta.sql'
-
-
-class DBEngine(Enum):
-    SQLITE = 1
-    POSTGRES = 2
+_INTERNAL_DB_URL = os.environ.get('INTERNAL_DB_URL')
+_TARGET_DB_URL = os.environ.get('TARGET_DB_URL')
 
 
 def main():
@@ -25,8 +22,6 @@ def main():
                         help='Skip registering applied migrations')
     parser.add_argument('--show', action='store_true',
                         help='Show all migrations applied')
-    parser.add_argument('-c', '--config', nargs='?', default='config.yaml',
-                        type=argparse.FileType('r'), help='Config file to use')
     parser.add_argument('-t', '--transactional', action='store_true',
                         help='Run every migration as a single transaction')
     parser.add_argument('--ignore_applied', action='store_true',
@@ -38,7 +33,6 @@ def main():
         raise NotImplementedError('This feature has not been implemented yet')
 
     arg_dict = {
-        'config_file': args.config,
         'apply_migrations': not args.fake,
         'register_migrations': not args.skip_register,
         'dry_run': args.dry,
@@ -58,11 +52,10 @@ def main():
 
 
 class Monarch:
-    def __init__(self, config_file, apply_migrations, register_migrations,
+    def __init__(self, apply_migrations, register_migrations,
                  dry_run, accept_all, ignore_applied):
         """ Initialize Monarch manager object.
 
-        :param config_file: Yaml config file.
         :param apply_migrations: if True, apply migrations to db.
         :param register_migrations: If True, register migration to db.
         :param dry_run: If True, just show what would be run on the db.
@@ -70,39 +63,21 @@ class Monarch:
         :param ignore_applied: Ignore previously applied migrations.
 
         """
-        def parse_config():
-            config = yaml.load(config_file, Loader=yaml.Loader)
-            databases = config['databases']
-            for db in ('internal_db', 'target_db'):
-                db_dict = databases[config['config'][db]]
-                if 'sqlite' in db_dict:
-                    db_settings = {
-                        'engine': DBEngine.SQLITE,
-                        'connection': db_dict['sqlite'],
-                    }
-                elif 'postgresql' in db_dict:
-                    db_settings = {
-                        'engine': DBEngine.POSTGRES,
-                        'connection': db_dict['postgresql'],
-                    }
-                else:
-                    raise ValueError('Db bad config')
-                setattr(self, db, db_settings)
 
         self.apply_migrations = apply_migrations
         self.register_migrations = register_migrations
         self.dry_run = dry_run
         self.accept_all = accept_all
-        parse_config()
+        if not all((_INTERNAL_DB_URL, _TARGET_DB_URL)):
+            raise RuntimeError('Both INTERNAL_DB_URL and TARGET_DB_URL need '
+                               'to be defined as var envs.')
+        self.internal_db = create_engine(_INTERNAL_DB_URL)
+        self.target_db = create_engine(_TARGET_DB_URL)
 
     def init_meta(self):
-        # TODO: add try-except
-        connection = self.get_db_connection(internal=True)
-        with connection:
-            curs = connection.cursor()
+        with self.internal_db.connect() as conn:
             script = self.get_sql_script(_INIT_MIGRATION)
-            curs.execute(script)
-            connection.commit()
+            conn.execute(script)
 
     def process_migration(self, migration):
         """Processes. a single migration.
@@ -140,13 +115,9 @@ class Monarch:
       :rtype: string[]
 
       """
-        # TODO: add try-except
-        connection = self.get_db_connection(internal=True)
-        with connection:
-            cursor = connection.cursor()
+        with self.internal_db.connect() as conn:
             sql = 'SELECT name from migration;'
-            cursor.execute(sql)
-            migrations = cursor.fetchall()
+            migrations = conn.execute(sql).fetchall()
         return [m[0] for m in migrations]
 
     def run_migrations(self, migrations):
@@ -170,18 +141,15 @@ class Monarch:
         if not self.accept_all and not self.prompt_for_migrations(migrations):
             return
 
-        connection = self.get_db_connection()
         applied_migrations = []
-        with connection:
-            curs = connection.cursor()
+        with self.target_db.connect() as conn:
             for migration in migrations:
                 name = migration['name']
                 script = migration['script']
                 print('Applying {}'.format(name))
                 if self.apply_migrations:
-                    curs.execute(script)
+                    conn.execute(script)
                 self.applied_migrations.append(name)
-            connection.commit()
         if self.register:
             self.register_migrations(applied_migrations)
 
@@ -193,39 +161,12 @@ class Monarch:
       :rtype: None
 
       """
-        # TODO: add try-except
-        connection = self.get_db_connection(internal=True)
-        with connection:
-            cursor = connection.cursor()
+        with self.internal_db.connect() as conn:
             for migration in migrations:
-                cursor.execute(
-                    'INSERT INTO migration (name) ' 'VALUES ("%s");' % migration
+                conn.execute(
+                    'INSERT INTO migration (name) '
+                    'VALUES ("%s");' % migration
                 )
-            connection.commit()
-
-    def get_db_connection(self, internal=False):
-        """
-      Returns a connection to the required db.
-
-      :param internal: Whether the connection is for the internal db.
-      :returns: A connection object.
-      :rtype: Connection
-
-      """
-        # TODO: Improve this to be more flexible
-        db_settings = self.internal_db if internal else self.target_db
-        print(db_settings)
-        if db_settings['engine'] == DBEngine.SQLITE:
-            import sqlite3
-            engine_module = sqlite3
-        elif db_settings['engine'] == DBEngine.POSTGRES:
-            import psycopg2
-            engine_module = psycopg2
-        try:
-            conn = engine_module.connect(**db_settings['connection'])
-        except Error as e:
-            print(e)
-        return conn
 
     def get_sql_script(self, migration):
         """Gets sql script from a migration.
@@ -262,7 +203,8 @@ class Monarch:
             if dependency not in {m['name'] for m in resolved}:
                 if dependency in {m['name'] for m in seen}:
                     raise ValueError(
-                        f'Circular dependency detected ' "{migration, dependency}"
+                        f'Circular dependency detected '
+                        '"{migration, dependency}"'
                     )
                 self._solve_dependencies(dependency, resolved, seen)
         resolved.append({'name': migration, **commands})
@@ -284,12 +226,14 @@ class Monarch:
                         commands = json.loads(line)
                     except JSONDecodeError as error:
                         raise ValueError(
-                            f'"{line}" in {migration} is not a valid Monarch command'
+                            f'"{line}" in {migration} is not a '
+                            'valid Monarch command'
                         ) from error
                     return commands
                 return {}
         except Exception as error:
-            raise RuntimeError(f'parsing headers for {migration} failed') from error
+            raise RuntimeError(f'parsing headers for {migration} '
+                               'failed') from error
 
     def is_valid_command(self, string):
         """Checks if a string is a valid Monarch command.
@@ -309,7 +253,7 @@ class Monarch:
       :rtype: bool
 
       """
-        print(f'About to run {len(migrations)} on blah')
+        print(f'About to run {len(migrations)} on {self.target_db.name}')
         for m in migrations:
             print(m['name'])
         response = input('Proceed? (Y/n) ').strip().lower()
