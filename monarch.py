@@ -5,9 +5,16 @@ import json
 from sqlalchemy import create_engine
 import os
 
-_INIT_MIGRATION = 'migrations/meta.sql'
 _INTERNAL_DB_URL = os.environ.get('INTERNAL_DB_URL')
 _TARGET_DB_URL = os.environ.get('TARGET_DB_URL')
+
+_INIT_MIGRATION = '''
+CREATE TABLE IF NOT EXISTS migration (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_on DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+'''
 
 
 def main():
