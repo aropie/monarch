@@ -8,13 +8,51 @@ environments.  There are several migration managers out there, but all
 of them are overly bloated as most of them rely on ORMs, and were an
 overkill for what I really needed:
 - Track the state of the DB in different environments.
-- Work with plain SQL so it can be used throughout different projects, no matter the language they are in.
-- A DB-agnostic tool, providing flexibility to work on different DB engines.
 - A simple way to transition from one DB state to another one.
 - A sane way to manage in what order the migrations should be applied
   (other than the usual file-naming by numbers).
 
 Hence, Monarch was created.
+
+## Why should I use Monarch instead of \<insert name of migration tool\>?
+- **DB engine and language independent**:
+  A lot of migration tools rely on you using a specific language, or a
+  specific DB or even an ORM. Monarch is a single executable file that
+  can work with any project independently of the language of the DB used
+  and doesn't expect any dependency.
+- **Work with plain SQL**: When dealing with the state of a DB, the most
+  natural way of handling it through plain SQL. This gives flexibility
+  and detaches the DB handling from any framework (at least at a migration level).
+- **Tracking of the DB state**: When working on a project it's common to have
+  multiple environments, and it can get really cumbersome to remember
+  what the state of each of these environments is. Monarch solves that for you.
+- **Use of environment variables**: No more creating separate config files for
+  every different environment. Monarch takes all its configuration from
+  environment variables (and optionally a `.env` file).
+- **No reliance on file-naming for dependencies**: This poses a problem
+   when submitting the migrations to version control and make said
+   migrations in a collaborative environment. The way Monarch works,
+   dependent migrations are not handled as a single stream, but rather
+   as branching succesions. This means that two developers can work
+   simultaneously on changing different tables at the same time
+   without stepping on each others way, provided said changes are not
+   related to each other.
+- **Migrations are stored independently from the target database itself**:
+   The state of the DB needs to be stored into a DB itself, but what
+   if I have restricted access to the DB I need to make changes to?
+   Monarch's approach gives more flexibility on this end, since
+   you can store and even check a DB's state without actually accessing it
+   (saving it as a sqlite file for instance).
+- **Granular dependency control**:
+  Assume you have 3 migrations: `1_create_person.sql`, `2_change_address.sql`,
+  `3_change_person.sql`. If you wanted to only make changes to the Person
+  table but preserve the state of Address, you'd have to cherry pick the
+  needed migrations in \<insert name of migration tool\>, while in
+  Monarch, you could only run the last Person-related migration and the
+  program will apply only the strictly needed migration to make that
+  work.
+
+If any of this sounds appealing, maybe give Monarch a try.
 
 ## Installation
 
