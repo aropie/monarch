@@ -115,7 +115,7 @@ One of the objectives of Monarch is to be database-agnostic.
 Internally, Monarch uses SQLAlchemy to handle the connections with the databases.
 This means that [all the databases supported by SQLAlchemy](https://docs.sqlalchemy.org/en/13/core/engines.html#supported-databases)
 are supported by Monarch as well, which covers all of the most common DB choices
-(MySQL, PostgreSQL, SQLite, Oracle, Microsoft SQL Server).
+(MySQL, PostgreSQL, SQLite, Microsoft SQL Server).
 
 To configure the database connections, [a database url](https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls)
 is used,which is defined through environment variables.
