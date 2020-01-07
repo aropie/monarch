@@ -29,7 +29,9 @@ Hence, Monarch was created.
 - **Use of environment variables**: No more creating separate config files for
   every different environment. Monarch takes all its configuration from
   environment variables (and optionally a `.env` file).
-- **No reliance on file-naming for dependencies**: This poses a problem
+- **No reliance on file-naming for dependencies**: Usually, migration
+   tools use file naming conventions to sort which migration should be applied first
+   (usually numbered migrations i.e. `1_first_migrations.sql`). This poses a problem
    when submitting the migrations to version control and make said
    migrations in a collaborative environment. The way Monarch works,
    dependent migrations are not handled as a single stream, but rather
@@ -39,7 +41,7 @@ Hence, Monarch was created.
    related to each other.
 - **Migrations are stored independently from the target database itself**:
    The state of the DB needs to be stored into a DB itself, but what
-   if I have restricted access to the DB I need to make changes to?
+   if you have restricted access to the DB you need to make changes to?
    Monarch's approach gives more flexibility on this end, since
    you can store and even check a DB's state without actually accessing it
    (saving it as a sqlite file for instance).
