@@ -123,7 +123,12 @@ class Monarch:
             candidates += self.get_migrations_to_run(migration)
         # Remove duplicates after all the migrations have been processed
         # to lower time complexity.
-        migrations_to_run = list(dict.fromkeys(candidates))
+        migrations_to_run = list()
+        unique_candidates = set()
+        for candidate in candidates:
+            if candidate.get("name") not in unique_candidates:
+                migrations_to_run.append(candidate)
+                unique_candidates.add(candidate.get("name"))
         self.run_migrations(migrations_to_run)
 
     def get_migrations_to_run(self, migration):
