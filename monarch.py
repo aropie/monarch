@@ -3,10 +3,12 @@ import argparse
 import json
 from json.decoder import JSONDecodeError
 from os import getenv, listdir
-from os.path import join, splitext, isfile
+from os.path import isfile, join, splitext
+
+import click
 from dotenv import load_dotenv
+from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, create_engine
 from sqlalchemy.sql import func
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, DateTime
 
 if isfile(".env"):
     load_dotenv(".env")
